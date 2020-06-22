@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <RootNamespace>CodeExerciseLibrary.TestAssembly</RootNamespace>
+    <AssemblyName>CodeExerciseLibrary.TestAssembly</AssemblyName>
   </PropertyGroup>
 
 </Project>

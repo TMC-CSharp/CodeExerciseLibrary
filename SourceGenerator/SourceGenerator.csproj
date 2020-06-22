@@ -5,6 +5,7 @@
     <RootNamespace>CodeExerciseLibrary.SourceGenerator</RootNamespace>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <LangVersion>preview</LangVersion>
+    <AssemblyName>CodeExerciseLibrary.SourceGenerator</AssemblyName>
   </PropertyGroup>
   
   <ItemGroup>
