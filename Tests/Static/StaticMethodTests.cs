@@ -34,7 +34,7 @@ namespace CodeExerciseLibrary.Tests.Static
         }
 
         [Fact]
-        public void GenerateStaticLocalDeclarationIntMethodArguments()
+        public void GenerateStaticLocalDeclarationIntMethod()
         {
             Assert.Throws<NotImplementedException>(() =>
             {
@@ -50,6 +50,21 @@ namespace CodeExerciseLibrary.Tests.Static
             static void Use(int value)
             {
             }
+        }
+
+        [Fact]
+        public void GenerateStaticReturnMethod()
+        {
+            Assert.Throws<NotImplementedException>(() => StubClass.RealStaticReturnStubClass().StaticVoidOnReturn());
+        }
+
+        [Fact]
+        public void GenerateStaticUseReturnMethod()
+        {
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                int value = StubClass.RealStaticReturnStubClass().StaticReturnInt2();
+            });
         }
     }
 }

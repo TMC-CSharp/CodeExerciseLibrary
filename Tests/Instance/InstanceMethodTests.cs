@@ -54,5 +54,24 @@ namespace CodeExerciseLibrary.Tests.Instance
             {
             }
         }
+
+        [Fact]
+        public void GenerateReturnMethod()
+        {
+            StubClass stub = new StubClass();
+
+            Assert.Throws<NotImplementedException>(() => stub.RealInstanceReturnStubClass().VoidOnReturn());
+        }
+
+        [Fact]
+        public void GenerateStaticUseReturnMethod()
+        {
+            StubClass stub = new StubClass();
+
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                int value = stub.RealInstanceReturnStubClass().ReturnInt2();
+            });
+        }
     }
 }

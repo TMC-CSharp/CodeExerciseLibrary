@@ -8,5 +8,7 @@ namespace CodeExerciseLibrary.TestAssembly
 {
     public class StubClass
     {
+        public StubClass RealInstanceReturnStubClass() => this;
+        public static StubClass RealStaticReturnStubClass() => new StubClass();
     }
 }
