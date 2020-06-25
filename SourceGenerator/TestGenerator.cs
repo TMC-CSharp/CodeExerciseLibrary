@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using CodeExerciseLibrary.SourceGenerator.Extensions;
+using CodeExerciseLibrary.SourceGenerator.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -35,6 +38,8 @@ namespace CodeExerciseLibrary.SourceGenerator
                 return;
             }
 
+            Compilation compilation = context.Compilation;
+
             foreach (ClassDeclarationSyntax @class in receiver.Classes)
             {
                 NamespaceDeclarationSyntax @namespace = @class.FindParent<NamespaceDeclarationSyntax>();
@@ -57,7 +62,7 @@ namespace CodeExerciseLibrary.SourceGenerator
 
                     foreach (StatementSyntax statement in method.Body.Statements)
                     {
-                        this.ProcessStatement(context, @namespace, @class, statement, null);
+                        this.ProcessStatement(context, ref compilation, @namespace, @class, statement, null);
                     }
                 }
             }
@@ -72,49 +77,139 @@ namespace CodeExerciseLibrary.SourceGenerator
 
                 ClassDeclarationSyntax @class = lambda.FindParent<ClassDeclarationSyntax>();
 
-                if (lambda.Body is BlockSyntax block)
+                switch (lambda.Body)
                 {
-                    foreach (StatementSyntax statementSyntax in block.Statements)
+                    case BlockSyntax block:
                     {
-                        if (statementSyntax is LocalDeclarationStatementSyntax localDeclaration)
+                        foreach (StatementSyntax statementSyntax in block.Statements)
                         {
-                            foreach (VariableDeclaratorSyntax variableDeclaration in localDeclaration.Declaration.Variables)
+                            if (statementSyntax is LocalDeclarationStatementSyntax localDeclaration)
                             {
-                                if (variableDeclaration.Initializer?.Value is InvocationExpressionSyntax invocation)
+                                this.ProcessLocalDeclaration(context, ref compilation, @namespace, @class, localDeclaration);
+
+                                foreach (VariableDeclaratorSyntax variableDeclaration in localDeclaration.Declaration.Variables)
                                 {
-                                    this.ProcessInvocation(context, @namespace, @class, invocation, localDeclaration.Declaration.Type);
+                                    if (variableDeclaration.Initializer?.Value is InvocationExpressionSyntax invocation)
+                                    {
+                                        this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, localDeclaration.Declaration.Type);
+                                    }
                                 }
+
+                                continue;
                             }
 
-                            continue;
+                            this.ProcessStatement(context, ref compilation, @namespace, @class, statementSyntax, null);
                         }
 
-                        this.ProcessStatement(context, @namespace, @class, statementSyntax, null);
+                        break;
                     }
-                }
-                else if (lambda.Body is InvocationExpressionSyntax invocation)
-                {
-                    this.ProcessInvocation(context, @namespace, @class, invocation, null);
+                    case InvocationExpressionSyntax invocation:
+                        this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, null);
+                        break;
                 }
             }
         }
 
-        private void ProcessStatement(SourceGeneratorContext context, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax returnType)
+        private void ProcessStatement(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax returnType)
         {
-            if (!(statement is ExpressionStatementSyntax expression))
+            switch (statement)
             {
-                return;
-            }
+                case LocalDeclarationStatementSyntax declaration:
+                {
+                    this.ProcessLocalDeclaration(context, ref compilation, @namespace, @class, declaration);
+                    break;
+                }
+                case ExpressionStatementSyntax expression:
+                {
+                    if (!(expression.Expression is InvocationExpressionSyntax invocation))
+                    {
+                        return;
+                    }
 
-            if (!(expression.Expression is InvocationExpressionSyntax invocation))
-            {
-                return;
+                    this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, returnType);
+                    break;
+                }
             }
-
-            this.ProcessInvocation(context, @namespace, @class, invocation, returnType);
         }
 
-        private void ProcessInvocation(SourceGeneratorContext context, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax returnType)
+        private void ProcessLocalDeclaration(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, LocalDeclarationStatementSyntax declaration)
+        {
+            SemanticModel methodModel = compilation.GetSemanticModel(declaration.SyntaxTree);
+            SymbolInfo targetSymbol = methodModel.GetSymbolInfo(declaration.Declaration.Type);
+
+            //If the declaration type doesn't exist, create it
+            if (!(targetSymbol.Symbol is null))
+            {
+                return;
+            }
+
+            string className = declaration.Declaration.Type.ToString();
+
+            SyntaxToken classIdentifier = SyntaxFactory.Identifier(className);
+
+            ClassDeclarationSyntax declarationClass = SyntaxFactory.ClassDeclaration(
+                identifier: classIdentifier, 
+                modifiers: SyntaxTokenList.Create(SyntaxFactory.Token(SyntaxKind.PublicKeyword)),
+
+                attributeLists: default,
+                typeParameterList: default,
+                baseList: default,
+                constraintClauses: default,
+                members: default
+            );
+
+            NamespaceDeclarationSyntax newNamespace = SyntaxFactory.NamespaceDeclaration(
+                name: @namespace.Name,
+                members: new SyntaxList<MemberDeclarationSyntax>(declarationClass),
+
+                externs: default,
+                usings: default
+            );
+
+            CompilationUnitSyntax compilationUnit = SyntaxFactory.CompilationUnit(
+                members: new SyntaxList<MemberDeclarationSyntax>(newNamespace),
+
+                externs: default,
+                usings: default,
+                attributeLists: default
+            );
+
+            CSharpCompilation csharpCompilation = CSharpCompilation.Create(
+                assemblyName: "GeneratedClass",
+                syntaxTrees: ImmutableList.Create(compilationUnit.SyntaxTree),
+
+                references: new[]
+                {
+                    MetadataReference.CreateFromFile(typeof(object).GetTypeInfo().Assembly.Location),
+                },
+
+                options: new CSharpCompilationOptions(outputKind: OutputKind.DynamicallyLinkedLibrary)
+            );
+
+            static byte[] Emit(CSharpCompilation compilation)
+            {
+                using MemoryStream memoryStream = new MemoryStream();
+
+                compilation.Emit(memoryStream);
+
+                return memoryStream.ToArray();
+            }
+
+            MetadataReference metadataReference = MetadataReference.CreateFromImage(Emit(csharpCompilation));
+
+            //Add the new generated class reference to the global compilation context
+            compilation = compilation.AddReferences(metadataReference);
+
+            StringBuilder argumentList = new StringBuilder(0);
+
+            string generatedMissingClass = CSharpMemberGenerator.GetEmptyClass(newNamespace, className, argumentList);
+
+            SourceText generatedClass = SourceText.From(generatedMissingClass, Encoding.UTF8);
+
+            context.AddSource($"{className}.cs", generatedClass);
+        }
+
+        private void ProcessInvocation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax returnType)
         {
             foreach (ArgumentSyntax argument in invocation.ArgumentList.Arguments)
             {
@@ -122,7 +217,7 @@ namespace CodeExerciseLibrary.SourceGenerator
                 {
                     TypeSyntax argumentReturnType = SyntaxFactory.ParseTypeName("dynamic");
 
-                    this.ProcessInvocation(context, @namespace, @class, argumentInvocation, argumentReturnType);
+                    this.ProcessInvocation(context, ref compilation, @namespace, @class, argumentInvocation, argumentReturnType);
                 }
             }
 
@@ -143,7 +238,7 @@ namespace CodeExerciseLibrary.SourceGenerator
                 return;
             }
 
-            SemanticModel methodModel = context.Compilation.GetSemanticModel(invocation.SyntaxTree);
+            SemanticModel methodModel = compilation.GetSemanticModel(invocation.SyntaxTree);
             SymbolInfo targetSymbol = methodModel.GetSymbolInfo(targetIdentifier);
 
             //If we are not sure about the symbol we should just ditch without breaking everything by accident!
@@ -171,11 +266,6 @@ namespace CodeExerciseLibrary.SourceGenerator
                 if (!(last is null))
                 {
                     targetSymbol = methodModel.GetSymbolInfo(last);
-                }
-
-                if (targetSymbol.Symbol is null)
-                {
-                    return;
                 }
             }
 
@@ -230,47 +320,12 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
 
             string generateMissingMethod = isStatic
-                ? TestGenerator.GetStaticMethod(@namespace, @class, extendingClass, invokeMember, argumentList, returnType)
-                : TestGenerator.GetInstanceMethod(@namespace, extendingClass, invokeMember, argumentList, returnType);
+                ? CSharpMemberGenerator.GetStaticMethod(@namespace, @class, extendingClass, invokeMember, argumentList, returnType)
+                : CSharpMemberGenerator.GetInstanceMethod(@namespace, extendingClass, invokeMember, argumentList, returnType);
 
             SourceText generatedMethod = SourceText.From(generateMissingMethod, Encoding.UTF8);
 
             context.AddSource(identifier, generatedMethod);
-        }
-
-        private static string GetStaticMethod(NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, StringBuilder argumentList, string returnType)
-        {
-            return $@"
-using System;
-namespace {@namespace.Name}
-{{
-    public partial class {@class.Identifier}
-    {{
-        private partial class {extendingClass.Name} : {extendingClass}
-        {{
-            public static {returnType} {invokeMember.Name}({argumentList})
-            {{
-                throw new NotImplementedException(""You are missing a static method with name {invokeMember.Name} on {extendingClass.Name}!"");
-            }}
-        }}
-    }}
-}}";
-        }
-
-        private static string GetInstanceMethod(NamespaceDeclarationSyntax @namespace, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, StringBuilder argumentList, string returnType)
-        {
-            return $@"
-using System;
-namespace {@namespace.Name}
-{{
-    internal static partial class {extendingClass.Name}Extension
-    {{
-        public static {returnType} {invokeMember.Name}(this {extendingClass} @this{(argumentList.Length > 0 ? $", {argumentList}" : "")})
-        {{
-            throw new NotImplementedException(""You are missing a method with name {invokeMember.Name} on {extendingClass.Name}!"");
-        }}
-    }}
-}}";
         }
 
         private class SyntaxReceiver : ISyntaxReceiver

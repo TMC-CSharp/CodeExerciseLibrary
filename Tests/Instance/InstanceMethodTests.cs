@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text;
 using CodeExerciseLibrary.TestAssembly;
 using Xunit;
@@ -71,6 +72,27 @@ namespace CodeExerciseLibrary.Tests.Instance
             Assert.Throws<NotImplementedException>(() =>
             {
                 int value = stub.RealInstanceReturnStubClass().ReturnInt2();
+            });
+        }
+
+        [Fact]
+        public void GenerateMissingClass()
+        {
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                MissingClass missingClass = new MissingClass();
+            });
+        }
+
+        [Fact]
+        public void GenerateMissingClassWithMethods()
+        {
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                //Don't call the constructor! It throws
+                MissingClass2 missingClass = (MissingClass2)RuntimeHelpers.GetUninitializedObject(typeof(MissingClass2));
+
+                missingClass.MissingMethodOnMissingClass();
             });
         }
     }
