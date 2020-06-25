@@ -85,6 +85,15 @@ namespace CodeExerciseLibrary.Tests.Instance
         }
 
         [Fact]
+        public void GenerateMissingClassWithArguments()
+        {
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                MissingClass missingClass = new MissingClass("First");
+            });
+        }
+
+        [Fact]
         public void GenerateMissingClassWithMethods()
         {
             Assert.Throws<NotImplementedException>(() =>

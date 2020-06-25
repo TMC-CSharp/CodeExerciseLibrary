@@ -6,6 +6,7 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <LangVersion>preview</LangVersion>
     <AssemblyName>CodeExerciseLibrary.SourceGenerator</AssemblyName>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
   
   <ItemGroup>

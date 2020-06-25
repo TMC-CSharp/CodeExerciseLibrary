@@ -17,7 +17,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace CodeExerciseLibrary.SourceGenerator
 {
     [Generator]
-    public class TestGenerator : ISourceGenerator
+    public partial class TestGenerator : ISourceGenerator
     {
         private HashSet<string> GeneratedMethods;
 
@@ -42,7 +42,7 @@ namespace CodeExerciseLibrary.SourceGenerator
 
             foreach (ClassDeclarationSyntax @class in receiver.Classes)
             {
-                NamespaceDeclarationSyntax @namespace = @class.FindParent<NamespaceDeclarationSyntax>();
+                NamespaceDeclarationSyntax? @namespace = @class.FindParent<NamespaceDeclarationSyntax>();
                 if (@namespace is null)
                 {
                     continue;
@@ -50,73 +50,69 @@ namespace CodeExerciseLibrary.SourceGenerator
 
                 foreach (MemberDeclarationSyntax member in @class.Members)
                 {
-                    if (!(member is MethodDeclarationSyntax method))
+                    if (!(member is MethodDeclarationSyntax method) || method.Body is null)
                     {
                         continue;
                     }
 
-                    if (method.Body is null)
-                    {
-                        continue;
-                    }
-
-                    foreach (StatementSyntax statement in method.Body.Statements)
-                    {
-                        this.ProcessStatement(context, ref compilation, @namespace, @class, statement, null);
-                    }
+                    this.ProcessSyntax(context, ref compilation, @namespace, @class, method.Body);
                 }
             }
 
             foreach (LambdaExpressionSyntax lambda in receiver.Lambda)
             {
-                NamespaceDeclarationSyntax @namespace = lambda.FindParent<NamespaceDeclarationSyntax>();
-                if (@namespace is null)
+                NamespaceDeclarationSyntax? @namespace = lambda.FindParent<NamespaceDeclarationSyntax>();
+                ClassDeclarationSyntax? @class = lambda.FindParent<ClassDeclarationSyntax>();
+
+                if (@namespace is null || @class is null)
                 {
                     continue;
                 }
 
-                ClassDeclarationSyntax @class = lambda.FindParent<ClassDeclarationSyntax>();
-
-                switch (lambda.Body)
-                {
-                    case BlockSyntax block:
-                    {
-                        foreach (StatementSyntax statementSyntax in block.Statements)
-                        {
-                            if (statementSyntax is LocalDeclarationStatementSyntax localDeclaration)
-                            {
-                                this.ProcessLocalDeclaration(context, ref compilation, @namespace, @class, localDeclaration);
-
-                                foreach (VariableDeclaratorSyntax variableDeclaration in localDeclaration.Declaration.Variables)
-                                {
-                                    if (variableDeclaration.Initializer?.Value is InvocationExpressionSyntax invocation)
-                                    {
-                                        this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, localDeclaration.Declaration.Type);
-                                    }
-                                }
-
-                                continue;
-                            }
-
-                            this.ProcessStatement(context, ref compilation, @namespace, @class, statementSyntax, null);
-                        }
-
-                        break;
-                    }
-                    case InvocationExpressionSyntax invocation:
-                        this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, null);
-                        break;
-                }
+                this.ProcessSyntax(context, ref compilation, @namespace, @class, lambda.Body);
             }
         }
 
-        private void ProcessStatement(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax returnType)
+        private void ProcessSyntax(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, CSharpSyntaxNode syntax)
+        {
+            switch (syntax)
+            {
+                case BlockSyntax block:
+                {
+                    foreach (StatementSyntax statementSyntax in block.Statements)
+                    {
+                        this.ProcessStatement(context, ref compilation, @namespace, @class, statementSyntax, null);
+                    }
+
+                    break;
+                }
+                case InvocationExpressionSyntax invocation:
+                    this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, null);
+                    break;
+            }
+        }
+
+        private void ProcessStatement(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax? returnType)
         {
             switch (statement)
             {
                 case LocalDeclarationStatementSyntax declaration:
                 {
-                    this.ProcessLocalDeclaration(context, ref compilation, @namespace, @class, declaration);
+                    this.ProcessLocalDeclaration(context, ref compilation, @namespace, declaration);
+
+                    foreach (VariableDeclaratorSyntax variableDeclaration in declaration.Declaration.Variables)
+                    {
+                        switch (variableDeclaration.Initializer?.Value)
+                        {
+                            case InvocationExpressionSyntax invocation:
+                                this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, declaration.Declaration.Type);
+                                break;
+                            case ObjectCreationExpressionSyntax objectCreation:
+                                this.ProcessObjectCreation(context, ref compilation, @namespace, objectCreation);
+                                break;
+                        }
+                    }
+
                     break;
                 }
                 case ExpressionStatementSyntax expression:
@@ -132,7 +128,49 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
         }
 
-        private void ProcessLocalDeclaration(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, LocalDeclarationStatementSyntax declaration)
+        private void ProcessObjectCreation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ObjectCreationExpressionSyntax objectCreation)
+        {
+            //Ignore constructors without arguments
+            if (objectCreation.ArgumentList?.Arguments.Count <= 0)
+            {
+                return;
+            }
+
+            SemanticModel methodModel = compilation.GetSemanticModel(objectCreation.SyntaxTree);
+            SymbolInfo targetSymbol = methodModel.GetSymbolInfo(objectCreation.Type);
+
+            //This is used for generating constructors only (for now, at least), type should exist already
+            if (targetSymbol.Symbol is null)
+            {
+                return;
+            }
+
+            SemanticModel methodModelOriginal = context.Compilation.GetSemanticModel(objectCreation.SyntaxTree);
+            SymbolInfo targetSymbolOriginal = methodModelOriginal.GetSymbolInfo(objectCreation.Type);
+
+            //Make sure we only add constructors for missing classes
+            if (!(targetSymbolOriginal.Symbol is null))
+            {
+                return;
+            }
+
+            string className = objectCreation.Type.ToString();
+            string arguments = CSharpMemberGenerator.GetArgumentList(objectCreation.ArgumentList.Arguments);
+
+            string identifier = $"{className}_{arguments.Length}.cs";
+            if (!this.GeneratedMethods.Add(identifier))
+            {
+                return;
+            }
+
+            string generateMissingMethod = CSharpMemberGenerator.GetEmptyClass(@namespace, className, arguments);
+
+            SourceText generatedMethod = SourceText.From(generateMissingMethod, Encoding.UTF8);
+
+            context.AddSource(identifier, generatedMethod);
+        }
+
+        private void ProcessLocalDeclaration(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, LocalDeclarationStatementSyntax declaration)
         {
             SemanticModel methodModel = compilation.GetSemanticModel(declaration.SyntaxTree);
             SymbolInfo targetSymbol = methodModel.GetSymbolInfo(declaration.Declaration.Type);
@@ -200,16 +238,14 @@ namespace CodeExerciseLibrary.SourceGenerator
             //Add the new generated class reference to the global compilation context
             compilation = compilation.AddReferences(metadataReference);
 
-            StringBuilder argumentList = new StringBuilder(0);
-
-            string generatedMissingClass = CSharpMemberGenerator.GetEmptyClass(newNamespace, className, argumentList);
+            string generatedMissingClass = CSharpMemberGenerator.GetEmptyClass(newNamespace, className);
 
             SourceText generatedClass = SourceText.From(generatedMissingClass, Encoding.UTF8);
 
             context.AddSource($"{className}.cs", generatedClass);
         }
 
-        private void ProcessInvocation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax returnType)
+        private void ProcessInvocation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax? returnType)
         {
             foreach (ArgumentSyntax argument in invocation.ArgumentList.Arguments)
             {
@@ -252,7 +288,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             //If there's no symbol for target then it doesn't exists
             if (targetSymbol.Symbol is null)
             {
-                IdentifierNameSyntax last = null;
+                IdentifierNameSyntax? last = null;
                 foreach (IdentifierNameSyntax node in invokeMember.DescendantNodes().OfType<IdentifierNameSyntax>())
                 {
                     if (node == targetIdentifier)
@@ -295,33 +331,22 @@ namespace CodeExerciseLibrary.SourceGenerator
                     return;
             }
 
-            StringBuilder argumentList = new StringBuilder(0);
+            string arguments = CSharpMemberGenerator.GetArgumentList(invocation.ArgumentList.Arguments);
 
-            foreach (ArgumentSyntax argument in invocation.ArgumentList.Arguments)
-            {
-                if (argumentList.Length > 0)
-                {
-                    argumentList.Append(", ");
-                }
-
-                //Using dynamic should work on all cases
-                argumentList.Append($"dynamic generated{argumentList.Length}");
-            }
-
-            this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, invokeMember, argumentList, returnType == null ? "void" : "dynamic"); //Use dynamic as quick hack for return values
+            this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, invokeMember, arguments, returnType == null ? "void" : "dynamic"); //Use dynamic as quick hack for return values
         }
 
-        private void GenerateMethod(SourceGeneratorContext context, bool isStatic, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, StringBuilder argumentList, string returnType)
+        private void GenerateMethod(SourceGeneratorContext context, bool isStatic, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, string arguments, string returnType)
         {
-            string identifier = $"{extendingClass.Name}_{invokeMember.Name}_{argumentList.Length}_{returnType}.cs";
+            string identifier = $"{extendingClass.Name}_{invokeMember.Name}_{arguments.Length}_{returnType}.cs";
             if (!this.GeneratedMethods.Add(identifier))
             {
                 return;
             }
 
             string generateMissingMethod = isStatic
-                ? CSharpMemberGenerator.GetStaticMethod(@namespace, @class, extendingClass, invokeMember, argumentList, returnType)
-                : CSharpMemberGenerator.GetInstanceMethod(@namespace, extendingClass, invokeMember, argumentList, returnType);
+                ? CSharpMemberGenerator.GetStaticMethod(@namespace, @class, extendingClass, invokeMember, arguments, returnType)
+                : CSharpMemberGenerator.GetInstanceMethod(@namespace, extendingClass, invokeMember, arguments, returnType);
 
             SourceText generatedMethod = SourceText.From(generateMissingMethod, Encoding.UTF8);
 
