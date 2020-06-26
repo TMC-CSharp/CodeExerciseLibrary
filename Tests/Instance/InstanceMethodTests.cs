@@ -113,5 +113,17 @@ namespace CodeExerciseLibrary.Tests.Instance
                 MissingClass3 missingClass = new MissingClass3(MissingClass3Static.MissingArgument);
             });
         }
+
+        [Fact]
+        public void GenerateCollectionInitializerObjects()
+        {
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                List<object> list = new List<object>
+                {
+                    new MissingCollectionInitializerClass("First")
+                };
+            });
+        }
     }
 }

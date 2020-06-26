@@ -11,7 +11,7 @@
 
   <PropertyGroup>
     <Description>Source Generator for adding missing methods and classes inside tests to allow compilation. Assists on creating code exercises.</Description>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
   </PropertyGroup>
   
   <ItemGroup>

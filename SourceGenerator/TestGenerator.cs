@@ -131,8 +131,20 @@ namespace CodeExerciseLibrary.SourceGenerator
 
         private void ProcessObjectCreation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ObjectCreationExpressionSyntax objectCreation)
         {
+            if (!(objectCreation.Initializer is null))
+            {
+                foreach (ExpressionSyntax initializerExpression in objectCreation.Initializer.Expressions)
+                {
+                    if (initializerExpression is ObjectCreationExpressionSyntax initializerObjectCreation)
+                    {
+                        this.GenerateEmptyClass(context, ref compilation, @namespace, initializerObjectCreation.Type.ToString());
+                        this.ProcessObjectCreation(context, ref compilation, @namespace, @class, initializerObjectCreation);
+                    }
+                }
+            }
+
             //Ignore constructors without arguments
-            if (objectCreation.ArgumentList?.Arguments.Count <= 0)
+            if (objectCreation.ArgumentList is null || objectCreation.ArgumentList.Arguments.Count <= 0)
             {
                 return;
             }
@@ -140,7 +152,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             SemanticModel methodModel = compilation.GetSemanticModel(objectCreation.SyntaxTree);
             SymbolInfo targetSymbol = methodModel.GetSymbolInfo(objectCreation.Type);
 
-            this.ProcessArguments(context, ref compilation, @namespace, @class, objectCreation.ArgumentList!.Arguments);
+            this.ProcessArguments(context, ref compilation, @namespace, @class, objectCreation.ArgumentList.Arguments);
 
             //This is used for generating constructors only (for now, at least), type should exist already
             if (targetSymbol.Symbol is null)
@@ -390,6 +402,10 @@ namespace CodeExerciseLibrary.SourceGenerator
                     break;
                 default:
                 {
+                    if (targetIdentifier.ToString() == "Test")
+                    {
+                            return default;
+                    }
                     //Ehh... Lets assume its a missing static class? Ehheheh...
                     ITypeSymbol symbol = this.GenerateEmptyClass(context, ref compilation, @namespace, targetIdentifier.ToString());
 
