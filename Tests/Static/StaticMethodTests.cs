@@ -66,6 +66,12 @@ namespace CodeExerciseLibrary.Tests.Static
                 int value = StubClass.RealStaticReturnStubClass().StaticReturnInt2();
             });
         }
+
+        [Fact]
+        public void GenerateStaticVoidMethodGenerateArguments()
+        {
+            Assert.Throws<NotImplementedException>(() => StubClass.StaticVoid(UnknownFieldClass.UnknownField));
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -155,7 +156,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
 
             string className = objectCreation.Type.ToString();
-            string arguments = CSharpMemberGenerator.GetArgumentList(objectCreation.ArgumentList.Arguments);
+            string arguments = CSharpMemberGenerator.GetArgumentList(objectCreation.ArgumentList!.Arguments);
 
             string identifier = $"{className}_{arguments.Length}.cs";
             if (!this.GeneratedMethods.Add(identifier))
@@ -183,10 +184,15 @@ namespace CodeExerciseLibrary.SourceGenerator
 
             string className = declaration.Declaration.Type.ToString();
 
+            this.GenerateEmptyClass(context, ref compilation, @namespace, className);
+        }
+
+        private ITypeSymbol GenerateEmptyClass(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, string className)
+        {
             SyntaxToken classIdentifier = SyntaxFactory.Identifier(className);
 
             ClassDeclarationSyntax declarationClass = SyntaxFactory.ClassDeclaration(
-                identifier: classIdentifier, 
+                identifier: classIdentifier,
                 modifiers: SyntaxTokenList.Create(SyntaxFactory.Token(SyntaxKind.PublicKeyword)),
 
                 attributeLists: default,
@@ -243,53 +249,96 @@ namespace CodeExerciseLibrary.SourceGenerator
             SourceText generatedClass = SourceText.From(generatedMissingClass, Encoding.UTF8);
 
             context.AddSource($"{className}.cs", generatedClass);
+
+            return compilation.GetTypeByMetadataName($"{@namespace.Name}.{declarationClass.Identifier}")!;
+        }
+
+        private void ProcessArguments(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, SeparatedSyntaxList<ArgumentSyntax> arguments)
+        {
+            foreach (ArgumentSyntax argument in arguments)
+            {
+                switch (argument.Expression)
+                {
+                    case InvocationExpressionSyntax argumentInvocation:
+                    {
+                        TypeSyntax argumentReturnType = SyntaxFactory.ParseTypeName("dynamic");
+
+                        this.ProcessInvocation(context, ref compilation, @namespace, @class, argumentInvocation, argumentReturnType);
+                        break;
+                    }
+                    case MemberAccessExpressionSyntax memberAccess:
+                    {
+                        IdentifierNameSyntax targetIdentifier = memberAccess.DescendantNodes().OfType<IdentifierNameSyntax>().LastOrDefault();
+                        if (targetIdentifier is null)
+                        {
+                            continue;
+                        }
+
+                        (bool isStatic, ITypeSymbol? extendingClass) = this.ProcessMemberAccess(context, ref compilation, @namespace, memberAccess);
+                        if (!isStatic || extendingClass is null)
+                        {
+                            continue;
+                        }
+
+                        this.GenerateStaticField(context, @namespace, @class, extendingClass, targetIdentifier);
+
+                        break;
+                    }
+                }
+            }
         }
 
         private void ProcessInvocation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax? returnType)
         {
-            foreach (ArgumentSyntax argument in invocation.ArgumentList.Arguments)
-            {
-                if (argument.Expression is InvocationExpressionSyntax argumentInvocation)
-                {
-                    TypeSyntax argumentReturnType = SyntaxFactory.ParseTypeName("dynamic");
+            this.ProcessArguments(context, ref compilation, @namespace, @class, invocation.ArgumentList.Arguments);
 
-                    this.ProcessInvocation(context, ref compilation, @namespace, @class, argumentInvocation, argumentReturnType);
-                }
-            }
-
-            if (!(invocation.Expression is MemberAccessExpressionSyntax invokeMember))
+            if (!(invocation.Expression is MemberAccessExpressionSyntax memberAccess))
             {
                 return;
             }
 
+            (bool isStatic, ITypeSymbol? extendingClass) = this.ProcessMemberAccess(context, ref compilation, @namespace, memberAccess);
+
+            if (extendingClass is null)
+            {
+                return;
+            }
+
+            string arguments = CSharpMemberGenerator.GetArgumentList(invocation.ArgumentList.Arguments);
+
+            this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, memberAccess, arguments, returnType == null ? "void" : "dynamic"); //Use dynamic as quick hack for return values
+        }
+
+        private (bool isStatic, ITypeSymbol? symbol) ProcessMemberAccess(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, MemberAccessExpressionSyntax memberAccess)
+        {
             //Skip any generic method
-            if (invokeMember.DescendantNodes().OfType<GenericNameSyntax>().Any())
+            if (memberAccess.DescendantNodes().OfType<GenericNameSyntax>().Any())
             {
-                return;
+                return default;
             }
             
-            IdentifierNameSyntax targetIdentifier = invokeMember.DescendantNodes().OfType<IdentifierNameSyntax>().LastOrDefault();
+            IdentifierNameSyntax targetIdentifier = memberAccess.DescendantNodes().OfType<IdentifierNameSyntax>().LastOrDefault();
             if (targetIdentifier is null)
             {
-                return;
+                return default;
             }
 
-            SemanticModel methodModel = compilation.GetSemanticModel(invocation.SyntaxTree);
+            SemanticModel methodModel = compilation.GetSemanticModel(memberAccess.SyntaxTree);
             SymbolInfo targetSymbol = methodModel.GetSymbolInfo(targetIdentifier);
 
             //If we are not sure about the symbol we should just ditch without breaking everything by accident!
             if (targetSymbol.CandidateReason != CandidateReason.None)
             {
-                return;
+                return default;
             }
 
-            SymbolInfo methodSymbolInfo = methodModel.GetSymbolInfo(invocation);
+            SymbolInfo methodSymbolInfo = methodModel.GetSymbolInfo(memberAccess);
 
             //If there's no symbol for target then it doesn't exists
             if (targetSymbol.Symbol is null)
             {
                 IdentifierNameSyntax? last = null;
-                foreach (IdentifierNameSyntax node in invokeMember.DescendantNodes().OfType<IdentifierNameSyntax>())
+                foreach (IdentifierNameSyntax node in memberAccess.DescendantNodes().OfType<IdentifierNameSyntax>())
                 {
                     if (node == targetIdentifier)
                     {
@@ -302,13 +351,18 @@ namespace CodeExerciseLibrary.SourceGenerator
                 if (!(last is null))
                 {
                     targetSymbol = methodModel.GetSymbolInfo(last);
+
+                    if (targetSymbol.Symbol is null)
+                    {
+                        targetIdentifier = last;
+                    }
                 }
             }
 
             //If there's no symbol for method then it doesn't exists
             if (!(methodSymbolInfo.Symbol is null))
             {
-                return;
+                return default;
             }
 
             bool isStatic = false;
@@ -328,12 +382,20 @@ namespace CodeExerciseLibrary.SourceGenerator
                     extendingClass = methodSymbol.ReturnType;
                     break;
                 default:
-                    return;
+                {
+                    //Ehh... Lets assume its a missing static class? Ehheheh...
+                    if (targetIdentifier.ToString() == "Test")
+                    {
+                            return default;
+                    }
+
+                    ITypeSymbol symbol = this.GenerateEmptyClass(context, ref compilation, @namespace, targetIdentifier.ToString());
+
+                    return (true, symbol);
+                }
             }
 
-            string arguments = CSharpMemberGenerator.GetArgumentList(invocation.ArgumentList.Arguments);
-
-            this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, invokeMember, arguments, returnType == null ? "void" : "dynamic"); //Use dynamic as quick hack for return values
+            return (isStatic, extendingClass);
         }
 
         private void GenerateMethod(SourceGeneratorContext context, bool isStatic, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, string arguments, string returnType)
@@ -351,6 +413,21 @@ namespace CodeExerciseLibrary.SourceGenerator
             SourceText generatedMethod = SourceText.From(generateMissingMethod, Encoding.UTF8);
 
             context.AddSource(identifier, generatedMethod);
+        }
+
+        private void GenerateStaticField(SourceGeneratorContext context, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, IdentifierNameSyntax targetIdentifer)
+        {
+            string identifier = $"{extendingClass.Name}_{targetIdentifer}.cs";
+            if (!this.GeneratedMethods.Add(identifier))
+            {
+                return;
+            }
+
+            string generateMissingField = CSharpMemberGenerator.GetStaticField(@namespace, @class, extendingClass, targetIdentifer);
+
+            SourceText generatedField = SourceText.From(generateMissingField, Encoding.UTF8);
+
+            context.AddSource(identifier, generatedField);
         }
 
         private class SyntaxReceiver : ISyntaxReceiver

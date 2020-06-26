@@ -59,6 +59,22 @@ namespace {@namespace.Name}
 }}";
         }
 
+        internal static string GetStaticField(NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, IdentifierNameSyntax targetIdentifer)
+        {
+            return $@"
+using System;
+namespace {@namespace.Name}
+{{
+    public partial class {@class.Identifier}
+    {{
+        private partial class {extendingClass.Name} : {extendingClass}
+        {{
+            public static dynamic {targetIdentifer} => throw new NotImplementedException(""You are missing a field with name {targetIdentifer} on {extendingClass.Name}!"");
+        }}
+    }}
+}}";
+        }
+
         internal static string GetArgumentList(SeparatedSyntaxList<ArgumentSyntax> arguments)
         {
             if (arguments.Count <= 0)

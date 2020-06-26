@@ -7,7 +7,11 @@
     <LangVersion>preview</LangVersion>
     <AssemblyName>CodeExerciseLibrary.SourceGenerator</AssemblyName>
     <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <Description>Source Generator for adding missing methods and classes inside tests to allow compilation. Assists on creating code exercises.</Description>
+    <Version>1.1.0</Version>
   </PropertyGroup>
   
   <ItemGroup>

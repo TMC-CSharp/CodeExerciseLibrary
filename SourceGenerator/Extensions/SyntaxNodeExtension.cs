@@ -7,7 +7,7 @@ namespace CodeExerciseLibrary.SourceGenerator.Extensions
 {
     internal static class SyntaxNodeExtension
     {
-        internal static T? FindParent<T>(this SyntaxNode node) where T: class
+        internal static T? FindParent<T>(this SyntaxNode? node) where T: class
         {
             while (!(node is T))
             {
