@@ -7,7 +7,7 @@ using Xunit;
 
 namespace CodeExerciseLibrary.Tests.Instance
 {
-    public class InstanceMethodTests
+    public partial class InstanceMethodTests
     {
         [Fact]
         public void GenerateVoidMethod()
@@ -102,6 +102,15 @@ namespace CodeExerciseLibrary.Tests.Instance
                 MissingClass2 missingClass = (MissingClass2)RuntimeHelpers.GetUninitializedObject(typeof(MissingClass2));
 
                 missingClass.MissingMethodOnMissingClass();
+            });
+        }
+
+        [Fact]
+        public void GenerateMissingInstantiationArguments()
+        {
+            Assert.Throws<NotImplementedException>(() =>
+            {
+                MissingClass3 missingClass = new MissingClass3(MissingClass3Static.MissingArgument);
             });
         }
     }

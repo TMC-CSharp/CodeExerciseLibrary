@@ -109,7 +109,7 @@ namespace CodeExerciseLibrary.SourceGenerator
                                 this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, declaration.Declaration.Type);
                                 break;
                             case ObjectCreationExpressionSyntax objectCreation:
-                                this.ProcessObjectCreation(context, ref compilation, @namespace, objectCreation);
+                                this.ProcessObjectCreation(context, ref compilation, @namespace, @class, objectCreation);
                                 break;
                         }
                     }
@@ -129,7 +129,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
         }
 
-        private void ProcessObjectCreation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ObjectCreationExpressionSyntax objectCreation)
+        private void ProcessObjectCreation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ObjectCreationExpressionSyntax objectCreation)
         {
             //Ignore constructors without arguments
             if (objectCreation.ArgumentList?.Arguments.Count <= 0)
@@ -157,6 +157,8 @@ namespace CodeExerciseLibrary.SourceGenerator
 
             string className = objectCreation.Type.ToString();
             string arguments = CSharpMemberGenerator.GetArgumentList(objectCreation.ArgumentList!.Arguments);
+
+            this.ProcessArguments(context, ref compilation, @namespace, @class, objectCreation.ArgumentList.Arguments);
 
             string identifier = $"{className}_{arguments.Length}.cs";
             if (!this.GeneratedMethods.Add(identifier))
