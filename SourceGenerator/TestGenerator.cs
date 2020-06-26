@@ -402,10 +402,6 @@ namespace CodeExerciseLibrary.SourceGenerator
                     break;
                 default:
                 {
-                    if (targetIdentifier.ToString() == "Test")
-                    {
-                            return default;
-                    }
                     //Ehh... Lets assume its a missing static class? Ehheheh...
                     ITypeSymbol symbol = this.GenerateEmptyClass(context, ref compilation, @namespace, targetIdentifier.ToString());
 
