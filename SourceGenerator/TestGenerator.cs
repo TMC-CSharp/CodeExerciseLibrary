@@ -140,6 +140,8 @@ namespace CodeExerciseLibrary.SourceGenerator
             SemanticModel methodModel = compilation.GetSemanticModel(objectCreation.SyntaxTree);
             SymbolInfo targetSymbol = methodModel.GetSymbolInfo(objectCreation.Type);
 
+            this.ProcessArguments(context, ref compilation, @namespace, @class, objectCreation.ArgumentList!.Arguments);
+
             //This is used for generating constructors only (for now, at least), type should exist already
             if (targetSymbol.Symbol is null)
             {
@@ -156,9 +158,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
 
             string className = objectCreation.Type.ToString();
-            string arguments = CSharpMemberGenerator.GetArgumentList(objectCreation.ArgumentList!.Arguments);
-
-            this.ProcessArguments(context, ref compilation, @namespace, @class, objectCreation.ArgumentList.Arguments);
+            string arguments = CSharpMemberGenerator.GetArgumentList(objectCreation.ArgumentList.Arguments);
 
             string identifier = $"{className}_{arguments.Length}.cs";
             if (!this.GeneratedMethods.Add(identifier))
@@ -191,6 +191,11 @@ namespace CodeExerciseLibrary.SourceGenerator
 
         private ITypeSymbol GenerateEmptyClass(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, string className)
         {
+            if (!this.GeneratedMethods.Add($"{className}.cs"))
+            {
+                return compilation.GetTypeByMetadataName($"{@namespace.Name}.{className}")!;
+            }
+
             SyntaxToken classIdentifier = SyntaxFactory.Identifier(className);
 
             ClassDeclarationSyntax declarationClass = SyntaxFactory.ClassDeclaration(
@@ -386,11 +391,6 @@ namespace CodeExerciseLibrary.SourceGenerator
                 default:
                 {
                     //Ehh... Lets assume its a missing static class? Ehheheh...
-                    if (targetIdentifier.ToString() == "Test")
-                    {
-                            return default;
-                    }
-
                     ITypeSymbol symbol = this.GenerateEmptyClass(context, ref compilation, @namespace, targetIdentifier.ToString());
 
                     return (true, symbol);
