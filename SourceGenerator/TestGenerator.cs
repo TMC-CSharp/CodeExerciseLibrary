@@ -137,7 +137,15 @@ namespace CodeExerciseLibrary.SourceGenerator
                 {
                     if (initializerExpression is ObjectCreationExpressionSyntax initializerObjectCreation)
                     {
-                        this.GenerateEmptyClass(context, ref compilation, @namespace, initializerObjectCreation.Type.ToString());
+                        SemanticModel classMethodModel = compilation.GetSemanticModel(initializerObjectCreation.SyntaxTree);
+                        SymbolInfo classTargetSymbol = classMethodModel.GetSymbolInfo(initializerObjectCreation.Type);
+
+                        //If the type doesn't exist, create it
+                        if (classTargetSymbol.Symbol is null)
+                        {
+                            this.GenerateEmptyClass(context, ref compilation, @namespace, initializerObjectCreation.Type.ToString());
+                        }
+
                         this.ProcessObjectCreation(context, ref compilation, @namespace, @class, initializerObjectCreation);
                     }
                 }
