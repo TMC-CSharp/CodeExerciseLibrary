@@ -10,8 +10,12 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <Authors>Joni Aromaa</Authors>
+    <Company>TestMyCode</Company>
     <Description>Source Generator for adding missing methods and classes inside tests to allow compilation. Assists on creating code exercises.</Description>
-    <Version>1.1.4</Version>
+    <RepositoryUrl>https://github.com/TMC-CSharp/CodeExerciseLibrary.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Version>1.1.4.1</Version>
   </PropertyGroup>
   
   <ItemGroup>
