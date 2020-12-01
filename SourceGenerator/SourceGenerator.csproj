@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>CodeExerciseLibrary.SourceGenerator</RootNamespace>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>9.0</LangVersion>
     <AssemblyName>CodeExerciseLibrary.SourceGenerator</AssemblyName>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -15,12 +15,12 @@
     <Description>Source Generator for adding missing methods and classes inside tests to allow compilation. Assists on creating code exercises.</Description>
     <RepositoryUrl>https://github.com/TMC-CSharp/CodeExerciseLibrary.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>1.1.4.1</Version>
+    <Version>1.2</Version>
   </PropertyGroup>
   
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="3.7.0-1.final" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.0.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="3.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.1" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

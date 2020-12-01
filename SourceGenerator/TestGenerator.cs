@@ -27,14 +27,14 @@ namespace CodeExerciseLibrary.SourceGenerator
             this.GeneratedMethods = new HashSet<string>();
         }
 
-        public void Initialize(InitializationContext context)
+        public void Initialize(GeneratorInitializationContext context)
         {
             context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
         }
 
-        public void Execute(SourceGeneratorContext context)
+        public void Execute(GeneratorExecutionContext context)
         {
-            if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
+            if (context.SyntaxReceiver is not SyntaxReceiver receiver)
             {
                 return;
             }
@@ -51,7 +51,7 @@ namespace CodeExerciseLibrary.SourceGenerator
 
                 foreach (MemberDeclarationSyntax member in @class.Members)
                 {
-                    if (!(member is MethodDeclarationSyntax method) || method.Body is null)
+                    if (member is not MethodDeclarationSyntax method || method.Body is null)
                     {
                         continue;
                     }
@@ -74,7 +74,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
         }
 
-        private void ProcessSyntax(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, CSharpSyntaxNode syntax)
+        private void ProcessSyntax(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, CSharpSyntaxNode syntax)
         {
             switch (syntax)
             {
@@ -93,7 +93,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
         }
 
-        private void ProcessStatement(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax? returnType)
+        private void ProcessStatement(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax? returnType)
         {
             switch (statement)
             {
@@ -118,7 +118,7 @@ namespace CodeExerciseLibrary.SourceGenerator
                 }
                 case ExpressionStatementSyntax expression:
                 {
-                    if (!(expression.Expression is InvocationExpressionSyntax invocation))
+                    if (expression.Expression is not InvocationExpressionSyntax invocation)
                     {
                         return;
                     }
@@ -129,7 +129,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
         }
 
-        private void ProcessObjectCreation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ObjectCreationExpressionSyntax objectCreation)
+        private void ProcessObjectCreation(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ObjectCreationExpressionSyntax objectCreation)
         {
             if (!(objectCreation.Initializer is null))
             {
@@ -193,7 +193,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             context.AddSource(identifier, generatedMethod);
         }
 
-        private void ProcessLocalDeclaration(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, LocalDeclarationStatementSyntax declaration)
+        private void ProcessLocalDeclaration(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, LocalDeclarationStatementSyntax declaration)
         {
             SemanticModel methodModel = compilation.GetSemanticModel(declaration.SyntaxTree);
             SymbolInfo targetSymbol = methodModel.GetSymbolInfo(declaration.Declaration.Type);
@@ -209,7 +209,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             this.GenerateEmptyClass(context, ref compilation, @namespace, className);
         }
 
-        private ITypeSymbol GenerateEmptyClass(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, string className)
+        private ITypeSymbol GenerateEmptyClass(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, string className)
         {
             if (!this.GeneratedMethods.Add($"{className}.cs"))
             {
@@ -280,7 +280,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             return compilation.GetTypeByMetadataName($"{@namespace.Name}.{declarationClass.Identifier}")!;
         }
 
-        private void ProcessArguments(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, SeparatedSyntaxList<ArgumentSyntax> arguments)
+        private void ProcessArguments(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, SeparatedSyntaxList<ArgumentSyntax> arguments)
         {
             foreach (ArgumentSyntax argument in arguments)
             {
@@ -315,11 +315,11 @@ namespace CodeExerciseLibrary.SourceGenerator
             }
         }
 
-        private void ProcessInvocation(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax? returnType)
+        private void ProcessInvocation(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, InvocationExpressionSyntax invocation, TypeSyntax? returnType)
         {
             this.ProcessArguments(context, ref compilation, @namespace, @class, invocation.ArgumentList.Arguments);
 
-            if (!(invocation.Expression is MemberAccessExpressionSyntax memberAccess))
+            if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
             {
                 return;
             }
@@ -336,7 +336,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, memberAccess, arguments, returnType == null ? "void" : "dynamic"); //Use dynamic as quick hack for return values
         }
 
-        private (bool isStatic, ITypeSymbol? symbol) ProcessMemberAccess(SourceGeneratorContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, MemberAccessExpressionSyntax memberAccess)
+        private (bool isStatic, ITypeSymbol? symbol) ProcessMemberAccess(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, MemberAccessExpressionSyntax memberAccess)
         {
             //Skip any generic method
             if (memberAccess.DescendantNodes().OfType<GenericNameSyntax>().Any())
@@ -420,7 +420,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             return (isStatic, extendingClass);
         }
 
-        private void GenerateMethod(SourceGeneratorContext context, bool isStatic, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, string arguments, string returnType)
+        private void GenerateMethod(GeneratorExecutionContext context, bool isStatic, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, MemberAccessExpressionSyntax invokeMember, string arguments, string returnType)
         {
             string identifier = $"{extendingClass.Name}_{invokeMember.Name}_{arguments.Length}_{returnType}.cs";
             if (!this.GeneratedMethods.Add(identifier))
@@ -437,7 +437,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             context.AddSource(identifier, generatedMethod);
         }
 
-        private void GenerateStaticField(SourceGeneratorContext context, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, IdentifierNameSyntax targetIdentifer)
+        private void GenerateStaticField(GeneratorExecutionContext context, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, ITypeSymbol extendingClass, IdentifierNameSyntax targetIdentifer)
         {
             string identifier = $"{extendingClass.Name}_{targetIdentifer}.cs";
             if (!this.GeneratedMethods.Add(identifier))
