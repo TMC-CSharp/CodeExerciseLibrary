@@ -16,7 +16,7 @@ namespace CodeExerciseLibrary.SourceGenerator.Extensions
                     return null;
                 }
 
-                node = node?.Parent;
+                node = node.Parent;
             }
 
             return node as T;

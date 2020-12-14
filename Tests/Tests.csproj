@@ -5,6 +5,7 @@
     <IsPackable>false</IsPackable>
     <RootNamespace>CodeExerciseLibrary.Tests</RootNamespace>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

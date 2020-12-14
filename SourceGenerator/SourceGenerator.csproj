@@ -15,7 +15,7 @@
     <Description>Source Generator for adding missing methods and classes inside tests to allow compilation. Assists on creating code exercises.</Description>
     <RepositoryUrl>https://github.com/TMC-CSharp/CodeExerciseLibrary.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>1.2</Version>
+    <Version>1.2.1</Version>
   </PropertyGroup>
   
   <ItemGroup>

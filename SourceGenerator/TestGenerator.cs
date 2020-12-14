@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Dynamic;
 using System.IO;
 using System.Linq;
@@ -79,53 +80,131 @@ namespace CodeExerciseLibrary.SourceGenerator
             switch (syntax)
             {
                 case BlockSyntax block:
-                {
-                    foreach (StatementSyntax statementSyntax in block.Statements)
                     {
-                        this.ProcessStatement(context, ref compilation, @namespace, @class, statementSyntax, null);
-                    }
+                        foreach (StatementSyntax statementSyntax in block.Statements)
+                        {
+                            this.ProcessSyntax(context, ref compilation, @namespace, @class, statementSyntax);
+                        }
 
-                    break;
-                }
+                        break;
+                    }
                 case InvocationExpressionSyntax invocation:
                     this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, null);
                     break;
-            }
-        }
-
-        private void ProcessStatement(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, ClassDeclarationSyntax @class, StatementSyntax statement, TypeSyntax? returnType)
-        {
-            switch (statement)
-            {
                 case LocalDeclarationStatementSyntax declaration:
-                {
-                    this.ProcessLocalDeclaration(context, ref compilation, @namespace, declaration);
-
-                    foreach (VariableDeclaratorSyntax variableDeclaration in declaration.Declaration.Variables)
                     {
-                        switch (variableDeclaration.Initializer?.Value)
+                        this.ProcessLocalDeclaration(context, ref compilation, @namespace, declaration);
+
+                        foreach (VariableDeclaratorSyntax variableDeclaration in declaration.Declaration.Variables)
                         {
-                            case InvocationExpressionSyntax invocation:
-                                this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, declaration.Declaration.Type);
-                                break;
-                            case ObjectCreationExpressionSyntax objectCreation:
-                                this.ProcessObjectCreation(context, ref compilation, @namespace, @class, objectCreation);
-                                break;
+                            switch (variableDeclaration.Initializer?.Value)
+                            {
+                                case InvocationExpressionSyntax invocation:
+                                    this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, declaration.Declaration.Type);
+                                    break;
+                                case ObjectCreationExpressionSyntax objectCreation:
+                                    this.ProcessObjectCreation(context, ref compilation, @namespace, @class, objectCreation);
+                                    break;
+                                case SwitchExpressionSyntax @switch:
+                                    foreach (SwitchExpressionArmSyntax switchArm in @switch.Arms)
+                                    {
+                                        this.ProcessSyntax(context, ref compilation, @namespace, @class, switchArm.Expression);
+                                    }
+                                    break;
+                            }
                         }
-                    }
 
-                    break;
-                }
+                        break;
+                    }
                 case ExpressionStatementSyntax expression:
-                {
-                    if (expression.Expression is not InvocationExpressionSyntax invocation)
                     {
-                        return;
-                    }
+                        if (expression.Expression is not InvocationExpressionSyntax invocation)
+                        {
+                            return;
+                        }
 
-                    this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, returnType);
-                    break;
-                }
+                        this.ProcessInvocation(context, ref compilation, @namespace, @class, invocation, null);
+                        break;
+                    }
+                case UsingStatementSyntax @using:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @using.Statement);
+                        break;
+                    }
+                case TryStatementSyntax @try:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @try.Block);
+
+                        foreach (CatchClauseSyntax @catch in @try.Catches)
+                        {
+                            this.ProcessSyntax(context, ref compilation, @namespace, @class, @catch.Block);
+                        }
+
+                        if (@try.Finally is not null)
+                        {
+                            this.ProcessSyntax(context, ref compilation, @namespace, @class, @try.Finally);
+                        }
+                        break;
+                    }
+                case FinallyClauseSyntax @finally:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @finally.Block);
+                        break;
+                    }
+                case ForEachStatementSyntax @foreach:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @foreach.Statement);
+                        break;
+                    }
+                case ForStatementSyntax @for:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @for.Statement);
+                        break;
+                    }
+                case WhileStatementSyntax @while:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @while.Statement);
+                        break;
+                    }
+                case DoStatementSyntax @do:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @do.Statement);
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @do.Condition);
+                        break;
+                    }
+                case CheckedStatementSyntax @checked:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @checked.Block);
+                        break;
+                    }
+                case FixedStatementSyntax @fixed:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @fixed.Statement);
+                        break;
+                    }
+                case UnsafeStatementSyntax @unsafe:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @unsafe.Block);
+                        break;
+                    }
+                case LockStatementSyntax @lock:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @lock.Statement);
+                        break;
+                    }
+                case SwitchStatementSyntax @switch:
+                    {
+                        this.ProcessSyntax(context, ref compilation, @namespace, @class, @switch.Expression);
+
+                        foreach (SwitchSectionSyntax section in @switch.Sections)
+                        {
+                            foreach (StatementSyntax statement in section.Statements)
+                            {
+                                this.ProcessSyntax(context, ref compilation, @namespace, @class, statement);
+                            }
+                        }
+                        break;
+                    }
             }
         }
 
@@ -259,7 +338,7 @@ namespace CodeExerciseLibrary.SourceGenerator
 
             static byte[] Emit(CSharpCompilation compilation)
             {
-                using MemoryStream memoryStream = new MemoryStream();
+                using MemoryStream memoryStream = new();
 
                 compilation.Emit(memoryStream);
 
@@ -287,30 +366,30 @@ namespace CodeExerciseLibrary.SourceGenerator
                 switch (argument.Expression)
                 {
                     case InvocationExpressionSyntax argumentInvocation:
-                    {
-                        TypeSyntax argumentReturnType = SyntaxFactory.ParseTypeName("dynamic");
+                        {
+                            TypeSyntax argumentReturnType = SyntaxFactory.ParseTypeName("dynamic");
 
-                        this.ProcessInvocation(context, ref compilation, @namespace, @class, argumentInvocation, argumentReturnType);
-                        break;
-                    }
+                            this.ProcessInvocation(context, ref compilation, @namespace, @class, argumentInvocation, argumentReturnType);
+                            break;
+                        }
                     case MemberAccessExpressionSyntax memberAccess:
-                    {
-                        IdentifierNameSyntax targetIdentifier = memberAccess.DescendantNodes().OfType<IdentifierNameSyntax>().LastOrDefault();
-                        if (targetIdentifier is null)
                         {
-                            continue;
+                            IdentifierNameSyntax? targetIdentifier = memberAccess.DescendantNodes().OfType<IdentifierNameSyntax>().LastOrDefault();
+                            if (targetIdentifier is null)
+                            {
+                                continue;
+                            }
+
+                            (bool isStatic, ITypeSymbol? extendingClass) = this.ProcessMemberAccess(context, ref compilation, @namespace, memberAccess);
+                            if (!isStatic || extendingClass is null)
+                            {
+                                continue;
+                            }
+
+                            this.GenerateStaticField(context, @namespace, @class, extendingClass, targetIdentifier);
+
+                            break;
                         }
-
-                        (bool isStatic, ITypeSymbol? extendingClass) = this.ProcessMemberAccess(context, ref compilation, @namespace, memberAccess);
-                        if (!isStatic || extendingClass is null)
-                        {
-                            continue;
-                        }
-
-                        this.GenerateStaticField(context, @namespace, @class, extendingClass, targetIdentifier);
-
-                        break;
-                    }
                 }
             }
         }
@@ -333,7 +412,7 @@ namespace CodeExerciseLibrary.SourceGenerator
 
             string arguments = CSharpMemberGenerator.GetArgumentList(invocation.ArgumentList.Arguments);
 
-            this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, memberAccess, arguments, returnType == null ? "void" : "dynamic"); //Use dynamic as quick hack for return values
+            this.GenerateMethod(context, isStatic, @namespace, @class, extendingClass, memberAccess, arguments, "dynamic"); //Use dynamic as quick hack for return values
         }
 
         private (bool isStatic, ITypeSymbol? symbol) ProcessMemberAccess(GeneratorExecutionContext context, ref Compilation compilation, NamespaceDeclarationSyntax @namespace, MemberAccessExpressionSyntax memberAccess)
@@ -343,7 +422,7 @@ namespace CodeExerciseLibrary.SourceGenerator
             {
                 return default;
             }
-            
+
             IdentifierNameSyntax targetIdentifier = memberAccess.DescendantNodes().OfType<IdentifierNameSyntax>().LastOrDefault();
             if (targetIdentifier is null)
             {
@@ -409,12 +488,12 @@ namespace CodeExerciseLibrary.SourceGenerator
                     extendingClass = methodSymbol.ReturnType;
                     break;
                 default:
-                {
-                    //Ehh... Lets assume its a missing static class? Ehheheh...
-                    ITypeSymbol symbol = this.GenerateEmptyClass(context, ref compilation, @namespace, targetIdentifier.ToString());
+                    {
+                        //Ehh... Lets assume its a missing static class? Ehheheh...
+                        ITypeSymbol symbol = this.GenerateEmptyClass(context, ref compilation, @namespace, targetIdentifier.ToString());
 
-                    return (true, symbol);
-                }
+                        return (true, symbol);
+                    }
             }
 
             return (isStatic, extendingClass);
@@ -454,8 +533,8 @@ namespace CodeExerciseLibrary.SourceGenerator
 
         private class SyntaxReceiver : ISyntaxReceiver
         {
-            internal List<ClassDeclarationSyntax> Classes { get; } = new List<ClassDeclarationSyntax>();
-            internal List<LambdaExpressionSyntax> Lambda { get; } = new List<LambdaExpressionSyntax>();
+            internal List<ClassDeclarationSyntax> Classes { get; } = new();
+            internal List<LambdaExpressionSyntax> Lambda { get; } = new();
 
             public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
             {

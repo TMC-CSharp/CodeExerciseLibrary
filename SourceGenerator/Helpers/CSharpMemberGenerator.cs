@@ -82,7 +82,7 @@ namespace {@namespace.Name}
                 return string.Empty;
             }
 
-            StringBuilder argumentList = new StringBuilder();
+            StringBuilder argumentList = new();
 
             foreach (ArgumentSyntax argument in arguments)
             {
